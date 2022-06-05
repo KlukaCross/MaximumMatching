@@ -17,6 +17,7 @@
 #include <QTimer>
 #include <QQueue>
 #include <QMessageBox>
+#include <QSet>
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -52,11 +53,10 @@ private:
     void break_tools();
     Node* get_select_node(QPoint coordinates);
     void delete_edges_without_node(Node *delete_node);
-    bool check_simple(QHash<Node*,QVector<Edge*>> &graph);
-    bool dfs(QHash<Node*,QVector<Edge*>> &graph, Node* source, Node* stock,
-             QVector<Edge*> &path, QVector<Node*> &visited, QHash<Edge*, int> &flow);
+    bool splitting_simple(QHash<Node*,QVector<Edge*>> &graph, QSet<Node*> &A, QSet<Node*> &B);
+    bool dfs(QHash<Node*,QVector<Edge*>> &graph, Node* u, QHash<Node*, bool> &visited, QHash<Node*, bool> &missing);
     Edge* get_edge(QHash<Node*,QVector<Edge*>> &graph, Node* from, Node* to);
-    void ford_fulkerson(QHash<Node*,QVector<Edge*>> &graph, QHash<Edge*, int> &flow, Node* source, Node* stock);
+    void ford_fulkerson(QHash<Node*,QVector<Edge*>> &graph, QSet<Node*> &A, QSet<Node*> &B);
 };
 
 

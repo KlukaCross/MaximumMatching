@@ -143,12 +143,16 @@ void MainWindow::update_all() {
 void MainWindow::search_max_matching() {
     break_tools();
     matching.clear();
-    QHash<Node*,QVector<Edge*>> graph;
-    for (auto v: nodes) {
-        graph[v] = QVector<Edge*>();
+    QHash<Edge*, Edge*> comparison_edges;
+    QHash<Node*, QVector<Edge*>> transport_network;
+    QSet<Node*> A, B;
+    for (auto *v: nodes) {
+        transport_network[v] = QVector<Edge*>();
     }
-    for (auto e: edges) {
-        graph[e->get_from()].push_back(e);
+    for (auto &e: edges) {
+        Edge* new_e = new Edge(e->get_from(), e->get_to());
+        transport_network[e->get_from()].push_back(new_e);
+        comparison_edges[new_e] = e;
     }
     if (nodes.empty()) {
         QMessageBox msgBox;
@@ -156,112 +160,67 @@ void MainWindow::search_max_matching() {
         msgBox.exec();
         return;
     }
-    if (!check_simple(graph)) {
+    if (!splitting_simple(transport_network, A, B)) {
         QMessageBox msgBox;
         msgBox.setText("Graph is not simple!");
         msgBox.exec();
         return;
     }
 
-    QHash<Edge*, Edge*> comparison_edges;
-    QHash<Node*, QVector<Edge*>> transport_network;
-    QHash<Edge*, int> flow;
-    Node *source = new Node(QPointF(0,0));
-    Node *stock = new Node(QPointF(0,0));
-    transport_network[source] = QVector<Edge*>();
-    transport_network[stock] = QVector<Edge*>();
-    for (auto v: nodes) {
-        transport_network[v] = QVector<Edge*>();
-    }
-    for (auto e: edges) {
-
-        Edge *rev_e = new Edge(e->get_to(), e->get_from());
-        Edge *rev_rev_e = new Edge(e->get_from(), e->get_to());
-        comparison_edges[rev_e] = e;
-        if (transport_network.find(e->get_from())->isEmpty()) {
-            Edge *to_stock = new Edge(e->get_from(), stock);
-            Edge *from_stock = new Edge(stock, e->get_from());
-            transport_network[e->get_from()].push_back(to_stock);
-            transport_network[e->get_from()].push_back(from_stock);
-            transport_network[stock].push_back(from_stock);
-            transport_network[stock].push_back(to_stock);
-            flow[to_stock] = 0;
-            flow[from_stock] = 0;
-        }
-        if (transport_network.find(e->get_to())->isEmpty()) {
-            Edge *to_source = new Edge(e->get_to(), source);
-            Edge *from_source = new Edge(source, e->get_to());
-            transport_network[e->get_to()].push_back(to_source);
-            transport_network[e->get_to()].push_back(from_source);
-            transport_network[source].push_back(from_source);
-            transport_network[source].push_back(to_source);
-            flow[to_source] = 0;
-            flow[from_source] = 0;
-        }
-        transport_network[e->get_to()].push_back(rev_e);
-        transport_network[e->get_to()].push_back(rev_rev_e);
-        transport_network[e->get_from()].push_back(rev_e);
-        transport_network[e->get_from()].push_back(rev_rev_e);
-        flow[rev_e] = 0;
-        flow[rev_rev_e] = 0;
-    }
-    MainWindow::ford_fulkerson(transport_network, flow, source, stock);
-    for (QHash<Edge*, int>::const_iterator it = flow.cbegin(), end = flow.cend(); it != end; ++it) {
-        if (it.value() >= 1 && comparison_edges.find(it.key()) != comparison_edges.end())
-            matching.push_back(comparison_edges[it.key()]);
+    ford_fulkerson(transport_network, A, B);
+    for (auto &b: B) {
+        if (!transport_network[b].isEmpty())
+            matching.push_back(comparison_edges[transport_network[b][0]]);
     }
 
-    delete source;
-    delete stock;
-    for (QHash<Edge*, int>::const_iterator it = flow.cbegin(), end = flow.cend(); it != end; ++it) {
+    for (auto it = comparison_edges.cbegin(), end = comparison_edges.cend(); it != end; ++it)
         delete it.key();
-    }
 }
 
-bool MainWindow::check_simple(QHash<Node*, QVector<Edge*>> &graph) {
-    for (QList<Edge *> edg: graph) {
-        for (auto e: edg) {
+bool MainWindow::splitting_simple(QHash<Node*,QVector<Edge*>> &graph, QSet<Node*> &A, QSet<Node*> &B) {
+    for (QVector<Edge *> &edg: graph) {
+        for (auto &e: edg) {
             if (!graph[e->get_to()].isEmpty()) return false;
+            A.insert(e->get_from());
+            B.insert(e->get_to());
         }
     }
     return true;
 }
 
-bool MainWindow::dfs(QHash<Node*,QVector<Edge*>> &graph, Node* source, Node* stock,
-         QVector<Edge*> &path, QVector<Node*> &visited, QHash<Edge*, int> &flow) {
-    if (source == stock) return true;
-    if (std::find(visited.begin(), visited.end(), source) != visited.end())
+bool MainWindow::dfs(QHash<Node*,QVector<Edge*>> &graph, Node* u, QHash<Node*, bool> &visited, QHash<Node*, bool> &missing) {
+    if (visited[u])
         return false;
-    for (auto e: graph[source]) {
-        if (flow[e] >= 1) continue;
-        visited.push_back(source);
-        if (dfs(graph, e->get_to(), stock, path, visited, flow)) {
-            path.push_back(e);
+    visited[u] = true;
+    for (auto e: graph[u]) {
+        if (!missing[e->get_to()] || dfs(graph, e->get_to(), visited, missing)) {
+            missing[e->get_to()] = true;
+            missing[u] = true;
+            Node* tmp = e->get_to();
+            e->set_to(e->get_from());
+            e->set_from(tmp);
+            graph[u].removeOne(e);
+            graph[e->get_from()].push_back(e);
             return true;
         }
     }
     return false;
 }
 
-Edge* MainWindow::get_edge(QHash<Node*,QVector<Edge*>> &graph, Node* from, Node* to) {
-    for (auto e: graph[from]) {
-        if (e->get_to() == to)
-            return e;
-    }
-    return nullptr;
-}
 
-void MainWindow::ford_fulkerson(QHash<Node*,QVector<Edge*>> &graph, QHash<Edge*, int> &flow, Node* source, Node* stock) {
-    while (true) {
-        QVector<Edge*> path;
-        QVector<Node*> visited;
-        if (!dfs(graph, source, stock, path, visited, flow))
-            break;
-        for (auto e: path) {
-            flow[e] += 1;
-            auto antiEdge = get_edge(graph, e->get_to(), e->get_from());
-            if (antiEdge != nullptr)
-                flow[antiEdge] -= 1;
+void MainWindow::ford_fulkerson(QHash<Node*,QVector<Edge*>> &graph, QSet<Node*> &A, QSet<Node*> &B) {
+    bool isPath = true;
+    QHash<Node*, bool> missing;
+    for (auto it = graph.cbegin(); it != graph.cend(); it++)
+        missing[it.key()] = false;
+    while (isPath) {
+        isPath = false;
+        QHash<Node*, bool> visited;
+        for (auto it = graph.cbegin(); it != graph.cend(); it++)
+            visited[it.key()] = false;
+        for (auto &a: A) {
+            if (!missing[a] && dfs(graph, a, visited, missing))
+                isPath = true;
         }
     }
 }

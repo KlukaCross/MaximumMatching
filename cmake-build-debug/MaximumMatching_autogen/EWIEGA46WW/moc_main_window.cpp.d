@@ -9,6 +9,7 @@
   /home/aprold/Qt/6.3.0/gcc_64/include/QtCore/QPoint \
   /home/aprold/Qt/6.3.0/gcc_64/include/QtCore/QQueue \
   /home/aprold/Qt/6.3.0/gcc_64/include/QtCore/QRect \
+  /home/aprold/Qt/6.3.0/gcc_64/include/QtCore/QSet \
   /home/aprold/Qt/6.3.0/gcc_64/include/QtCore/QSize \
   /home/aprold/Qt/6.3.0/gcc_64/include/QtCore/QSizeF \
   /home/aprold/Qt/6.3.0/gcc_64/include/QtCore/QTimer \
